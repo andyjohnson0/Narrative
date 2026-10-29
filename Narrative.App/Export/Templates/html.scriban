@@ -1,0 +1,139 @@
+{{~
+# Built-in HTML template for narrative -export. Copy it with -show-template html, change it, and use
+# it with -template <file>. Often only the CSS needs changing. See TemplateExporter for the model and
+# the extra functions.
+#
+# Long chats make huge pages, so the markup is kept small: one line per message, no ids, and the
+# sender's colour comes from a class (s1, s2, ...) rather than a style on every message. A sender's
+# name is shown only at the start of a run of their messages. Each day is a <section> the browser can
+# skip laying out until it's scrolled into view.
+
+func size(bytes)
+  if bytes < 1024
+    ret bytes + " bytes"
+  else if bytes < 1048576
+    ret (math.round (bytes / 1024)) + " KB"
+  end
+  ret (math.round (bytes / 1048576) 1) + " MB"
+end
+
+func media(m)
+  if m.attachment_state == "missing"
+    ret '<p class="placeholder">Attachment not available: ' + html.escape(m.attachment_name) + '</p>'
+  else if m.attachment_state != "stored"
+    ret '<p class="placeholder">Media left out of the export</p>'
+  end
+  a = m.attachment
+  name = html.escape a.file_name
+  url = attachment_url a
+  if url == null
+    ret '<p class="placeholder">' + name + ' (stored, not exported)</p>'
+  end
+  url = html.escape url
+  if a.kind == "image" || a.kind == "sticker"
+    ret '<img class="' + a.kind + '" src="' + url + '" alt="' + name + '" loading="lazy">'
+  else if a.kind == "video"
+    ret '<video src="' + url + '" controls preload="none"></video>'
+  else if a.kind == "voiceNote" || a.kind == "audio"
+    ret '<audio src="' + url + '" controls preload="none"></audio>'
+  end
+  ret '<p><a href="' + url + '" download="' + name + '">' + name + '</a> <span class="size">' + size(a.size) + '</span></p>'
+end
+
+func body(m)
+  if m.kind == "deleted"
+    ret '<p class="placeholder">Message deleted</p>'
+  end
+  out = ""
+  if m.email_start
+    out = '<p class="subject">' + html.escape(m.email.subject == "" ? "(no subject)" : m.email.subject) + '</p>'
+  end
+  if m.kind == "media"
+    out = out + media(m)
+  end
+  if m.text != ""
+    out = out + '<p>' + html.escape(m.text) + '</p>'
+  end
+  ret out
+end
+~}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="narrative">
+<title>{{ title | html.escape }}</title>
+<style>
+:root {
+  --bg: #efeae2; --bubble: #ffffff; --mine: #d9fdd3; --text: #1b1b1b; --muted: #667781;
+  --system: #e1f2fb; --rule: #d1d7db; --name-lightness: 38%;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b141a; --bubble: #1f2c34; --mine: #005c4b; --text: #e9edef; --muted: #8696a0;
+    --system: #182229; --rule: #2a3942; --name-lightness: 68%;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 760px; margin: 0 auto; padding: 16px; }
+header { padding: 8px 0 16px; border-bottom: 1px solid var(--rule); margin-bottom: 8px; }
+header h1 { margin: 0 0 4px; font-size: 22px; }
+header p { margin: 0; color: var(--muted); font-size: 13px; }
+/* The browser skips days that are off screen until they're scrolled to. */
+section { content-visibility: auto; contain-intrinsic-size: auto 1200px; padding-top: 12px; }
+section > h2 { display: table; margin: 8px auto; padding: 4px 12px; border-radius: 8px; background: var(--bubble); color: var(--muted); font-size: 12.5px; font-weight: 500; }
+/* A message: the sender (first of a run only) and time on top, then its content. */
+.msg { display: grid; grid-template-columns: 1fr auto; column-gap: 8px; align-items: baseline; background: var(--bubble); border-radius: 8px; padding: 4px 10px 6px; margin: 2px 0; max-width: 85%; width: fit-content; box-shadow: 0 1px 0.5px rgb(0 0 0 / 13%); }
+.msg:has(> .who), .msg.me:not(.me + .me) { margin-top: 8px; }
+.msg > * { grid-column: 1 / -1; }
+.who { grid-column: 1; font-weight: 600; font-size: 12.5px; color: hsl(var(--hue, 200) 60% var(--name-lightness)); }
+.msg > time { grid-column: 2; grid-row: 1; color: var(--muted); font-size: 11.5px; }
+.msg p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.edited { color: var(--muted); font-size: 12px; font-style: italic; }
+/* The first message of an email shows its subject. */
+.subject { font-weight: 600; }
+.subject::before { content: "✉ "; color: var(--muted); font-weight: normal; }
+/* With -me, that person's messages are on the right, as in WhatsApp. */
+.msg.me { margin-left: auto; background: var(--mine); }
+.sys { display: table; margin: 8px auto; padding: 4px 10px; border-radius: 8px; background: var(--system); color: var(--muted); font-size: 12.5px; text-align: center; white-space: pre-wrap; max-width: 85%; }
+.placeholder { color: var(--muted); font-style: italic; }
+img, video { display: block; max-width: 100%; max-height: 480px; margin-top: 4px; border-radius: 6px; }
+img.sticker { max-width: 160px; }
+audio { display: block; margin-top: 4px; max-width: 100%; }
+.size { color: var(--muted); font-size: 12px; }
+@media print {
+  body { background: none; }
+  section { content-visibility: visible; }
+  .msg, section > h2 { box-shadow: none; border: 1px solid #ccc; }
+}
+{{~ for person in people ~}}
+.s{{ for.index + 1 }} { --hue: {{ ((for.index + 1) * 137) % 360 }}; }
+{{~ end ~}}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>{{ title | html.escape }}</h1>
+<p>{{ if chat }}{{ chat.source | html.escape }} {{ chat.source == "Email" ? "thread" : "chat" }}{{ else }}Conversation{{ if selection.direct }} between them alone{{ end }}{{ if selection.source }}, {{ selection.source | html.escape }} only{{ end }}{{ end }} · {{ messages.size }} messages{{ if first }} · {{ first | object.format "d MMMM yyyy" }} to {{ last | object.format "d MMMM yyyy" }}{{ end }}{{ if selection.people.size > 0 }} · from {{ selection.people | array.join ", " | html.escape }}{{ end }}</p>
+</header>
+{{~ for day in days ~}}
+{{~ previous = 0 ~}}
+<section>
+<h2>{{ day.date | object.format "dddd d MMMM yyyy" }}</h2>
+{{~ for m in day.messages ~}}
+{{~ if m.kind == "system" ~}}
+<p class="sys"><time>{{ m.timestamp | object.format "HH:mm" }}</time> · {{ m.text | html.escape }}</p>
+{{~ previous = 0 ~}}
+{{~ else ~}}
+<div class="msg s{{ m.sender_number }}{{ if m.is_me }} me{{ end }}{{ if m.kind != "text" }} {{ m.kind }}{{ end }}">{{ if m.sender_number != previous && !m.is_me }}<span class="who">{{ m.sender | html.escape }}</span>{{ end }}<time>{{ m.timestamp | object.format "HH:mm" }}</time>{{ body m }}{{ if m.is_edited }}<span class="edited">edited</span>{{ end }}</div>
+{{~ previous = m.sender_number ~}}
+{{~ end ~}}
+{{~ end ~}}
+</section>
+{{~ end ~}}
+</main>
+</body>
+</html>

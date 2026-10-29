@@ -1,0 +1,54 @@
+{{~
+# Built-in Markdown template for narrative -export. Copy it with -show-template md, change it, and
+# use it with -template <file>. See TemplateExporter for the model and the extra functions.
+
+func media(m)
+  if m.attachment_state == "stored"
+    url = attachment_url m.attachment
+    if url == null
+      ret "📎 `" + m.attachment.file_name + "` *(stored, not exported)*"
+    else if m.attachment.kind == "image" || m.attachment.kind == "sticker"
+      ret "![" + markdown_escape(m.attachment.file_name) + "](" + url + ")"
+    else
+      ret "📎 [" + markdown_escape(m.attachment.file_name) + "](" + url + ")"
+    end
+  else if m.attachment_state == "missing"
+    ret "*[attachment not available: " + markdown_escape(m.attachment_name) + "]*"
+  else
+    ret "*[media left out of the export]*"
+  end
+end
+
+func body(m)
+  if m.kind == "deleted"
+    ret "*[message deleted]*"
+  end
+  text = markdown_escape m.text
+  if m.kind == "media"
+    if text == ""
+      text = media(m)
+    else
+      text = media(m) + "\\\n" + text
+    end
+  end
+  if m.is_edited
+    text = text + " *(edited)*"
+  end
+  if m.email_start
+    subject = "✉ *" + markdown_escape(m.email.subject == "" ? "(no subject)" : m.email.subject) + "*"
+    text = text == "" ? subject : subject + "\\\n" + text
+  end
+  ret text
+end
+~}}
+# {{ markdown_escape title }}
+
+{{ if chat }}{{ chat.source }} {{ chat.source == "Email" ? "thread" : "chat" }}{{ else }}Conversation{{ if selection.direct }} between them alone{{ end }}{{ if selection.source }}, {{ selection.source }} only{{ end }}{{ end }} · {{ messages.size }} messages{{ if first }} · {{ first | object.format "d MMMM yyyy" }} to {{ last | object.format "d MMMM yyyy" }}{{ end }}{{ if selection.people.size > 0 }} · from {{ selection.people | array.each @markdown_escape | array.join ", " }}{{ end }}
+{{~ for day in days ~}}
+
+## {{ day.date | object.format "dddd d MMMM yyyy" }}
+{{~ for m in day.messages ~}}
+
+{{ if m.kind == "system" }}*{{ m.timestamp | object.format "HH:mm" }} · {{ markdown_escape m.text }}*{{ else }}**{{ m.timestamp | object.format "HH:mm" }} {{ markdown_escape m.sender }}:** {{ body m }}{{ end }}
+{{~ end ~}}
+{{~ end ~}}
