@@ -156,6 +156,23 @@ namespace Narrative.Tests
         }
 
         [Fact]
+        public void JsonlLeavesOutEmailQuotes()
+        {
+            var path = temp.File("out.jsonl");
+            RunOk("-export", path, "-person", "Alex Smith", "-person", "Sam Taylor");
+
+            var lines = File.ReadAllLines(path).Select(l => JsonDocument.Parse(l).RootElement)
+                .Select(m => (m.GetProperty("userid").GetString(), m.GetProperty("content").GetString()));
+            Assert.Equal(
+                new[]
+                {
+                    ("Alex Smith", "Chat 1"), ("Alex Smith", "Email 1"), ("Sam Taylor", "Group 2"), ("Alex Smith", "Group 3"),
+                    ("Sam Taylor", "Email 2\n\nSee you"), ("Sam Taylor", "Chat 2"),
+                },
+                lines);
+        }
+
+        [Fact]
         public void HtmlAndMarkdownShowSubjects()
         {
             var html = temp.File("out.html");

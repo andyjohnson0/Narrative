@@ -54,6 +54,10 @@ namespace Narrative.App.Export
             {
                 throw new NarrativeException("A CSV export can't embed files; it only names them.");
             }
+            if (request.Format == ExportFormat.Jsonl && request.Attachments == AttachmentMode.Embed)
+            {
+                throw new NarrativeException("A JSONL export can't embed files; it holds text only.");
+            }
 
             var document = new ExportBuilder(db).Build(request);
             if (request.Format == ExportFormat.WhatsApp)
@@ -62,8 +66,9 @@ namespace Narrative.App.Export
             }
 
             string? filesFolder = null;
-            // A CSV only names files, so writing them would be clutter.
-            if (request.Attachments == AttachmentMode.Folder && document.Attachments.Count > 0 && request.Format != ExportFormat.Csv)
+            // A CSV only names files and JSONL leaves them out, so writing them would be clutter.
+            var textOnly = request.Format is ExportFormat.Csv or ExportFormat.Jsonl;
+            if (request.Attachments == AttachmentMode.Folder && document.Attachments.Count > 0 && !textOnly)
             {
                 filesFolder = WriteFiles(document.Attachments, request.OutputPath);
             }
@@ -71,6 +76,7 @@ namespace Narrative.App.Export
 
             var directory = Path.GetDirectoryName(Path.GetFullPath(request.OutputPath))!;
             Directory.CreateDirectory(directory);
+            var messages = document.Messages.Count;
             try
             {
                 using var stream = File.Create(request.OutputPath);
@@ -88,6 +94,10 @@ namespace Narrative.App.Export
                             CsvExporter.Write(document, writer, request.Excel);
                         }
                         break;
+                    case ExportFormat.Jsonl:
+                        // Messages with nothing to say are skipped, so count what was written.
+                        messages = JsonlExporter.Write(document, stream);
+                        break;
                     default:
                         using (var writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false)))
                         {
@@ -102,7 +112,7 @@ namespace Narrative.App.Export
                 File.Delete(request.OutputPath);
                 throw;
             }
-            return new ExportResult(document.Messages.Count, document.Attachments.Count, filesFolder);
+            return new ExportResult(messages, request.Format == ExportFormat.Jsonl ? 0 : document.Attachments.Count, filesFolder);
         }
 
         /// <summary>

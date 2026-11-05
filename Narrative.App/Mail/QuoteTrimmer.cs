@@ -37,6 +37,34 @@ namespace Narrative.App.Mail
         }
 
         /// <summary>
+        /// Removes every <c>&gt;</c> line from <paramref name="body"/>, wherever it is, with the
+        /// attribution line above each quote. What's left may be empty.
+        /// </summary>
+        /// <param name="body">The body with LF line endings.</param>
+        public static string RemoveQuotes(string body)
+        {
+            var lines = body.Split('\n');
+            var removed = new bool[lines.Length];
+            for (int i = 0; i < lines.Length; i++)
+            {
+                if (!IsQuoted(lines[i]))
+                {
+                    continue;
+                }
+                removed[i] = true;
+                if (i == 0 || !IsQuoted(lines[i - 1]))
+                {
+                    // The start of a quote: the attribution and blank lines above it go too.
+                    for (int j = WithoutAttribution(lines, i); j < i; j++)
+                    {
+                        removed[j] = true;
+                    }
+                }
+            }
+            return string.Join("\n", lines.Where((_, i) => !removed[i]));
+        }
+
+        /// <summary>
         /// Where the text before the quote that ends at <paramref name="end"/> stops, leaving out an
         /// attribution line just above it.
         /// </summary>

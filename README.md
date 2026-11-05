@@ -59,6 +59,7 @@ of every message.
   | Markdown | One section per day. |
   | JSON, XML | Every field, versioned, for other programs. |
   | CSV | One line per message: timestamp, person, text, kind, edited, attachment, source, chat, subject. `-excel` adds a BOM and guards against formula injection. |
+  | JSONL | One line per message, `{"userid":"Sam Taylor","content":"..."}`, with only what was said: no system messages, deleted messages, media without a caption, timestamps, subjects or email quotes. For feeding conversations to other programs, such as language models. |
   | WhatsApp `.txt` / `.zip` | WhatsApp's own format and zip layout, so a merged chat can be written back out as one canonical export. Re-importing it gives an identical database. Email is written the same way (subject as the first line, times to the minute), so a conversation across sources reads as one chat; imported back, it's a WhatsApp chat, not emails. |
   | Your own template | HTML and Markdown come from [Scriban](https://github.com/scriban/scriban) templates. `-show-template` prints the built-in one for you to change. |
 
@@ -103,6 +104,7 @@ narrative -export sam.html -person "Alex Smith" -person "Sam Taylor" -me "Alex S
 narrative -export sam-chat.html -chat "Sam Taylor" -me "Alex Smith"
 narrative -export sam-2023.md -chat "Sam Taylor" -from 2023-01-01 -to 2023-12-31
 narrative -export sam.csv -chat "Sam Taylor" -person "Sam Taylor"
+narrative -export sam.jsonl -person "Alex Smith" -person "Sam Taylor"
 narrative -export merged.zip -chat "Sam Taylor"
 ```
 

@@ -64,10 +64,10 @@ namespace Narrative.App
             };
             var exportOption = new Option<string?>("-export")
             {
-                Description = "Export the chat or email thread named by -chat, or the conversation between the -person names, to this file. The format comes from the extension unless -format or -template says otherwise: .json, .xml, .md, .html, .csv, or .txt or .zip for WhatsApp's own export format (a .zip holds the chat file and attachments, laid out as WhatsApp does).",
+                Description = "Export the chat or email thread named by -chat, or the conversation between the -person names, to this file. The format comes from the extension unless -format or -template says otherwise: .json, .xml, .md, .html, .csv, .jsonl (one line per message, sender and text only), or .txt or .zip for WhatsApp's own export format (a .zip holds the chat file and attachments, laid out as WhatsApp does).",
                 HelpName = "file",
             };
-            var formatOption = new Option<string?>("-format") { Description = "With -export: json, xml, md, html, csv or whatsapp (also txt).", HelpName = "format" };
+            var formatOption = new Option<string?>("-format") { Description = "With -export: json, xml, md, html, csv, jsonl or whatsapp (also txt).", HelpName = "format" };
             var templateOption = new Option<string?>("-template")
             {
                 Description = "With -export, render through this Scriban template instead of a built-in format. Start from -show-template.",
@@ -75,7 +75,7 @@ namespace Narrative.App
             };
             var attachmentsOption = new Option<string>("-attachments")
             {
-                Description = "With -export, what to do with stored attachment files: folder (write them to a <name>_files folder beside the export; for a WhatsApp .txt, beside it under their own names), embed (inside the export; not for WhatsApp or CSV), or none. A CSV never writes files. A WhatsApp .zip holds them unless this is none.",
+                Description = "With -export, what to do with stored attachment files: folder (write them to a <name>_files folder beside the export; for a WhatsApp .txt, beside it under their own names), embed (inside the export; not for WhatsApp, CSV or JSONL), or none. A CSV or JSONL export never writes files. A WhatsApp .zip holds them unless this is none.",
                 HelpName = "mode",
                 DefaultValueFactory = _ => "folder",
             };
@@ -318,13 +318,13 @@ namespace Narrative.App
             else if (formatName != null)
             {
                 format = ExportRequest.ParseFormat(formatName)
-                    ?? throw new NarrativeException($"Unknown format '{formatName}'. Use json, xml, md, html, csv or whatsapp.");
+                    ?? throw new NarrativeException($"Unknown format '{formatName}'. Use json, xml, md, html, csv, jsonl or whatsapp.");
             }
             else
             {
                 format = ExportRequest.FormatFromExtension(path)
                     ?? throw new NarrativeException(
-                        $"Can't tell the format from '{Path.GetFileName(path)}'. Use a .json, .xml, .md, .html, .csv, .txt or .zip file name, or -format.");
+                        $"Can't tell the format from '{Path.GetFileName(path)}'. Use a .json, .xml, .md, .html, .csv, .jsonl, .txt or .zip file name, or -format.");
             }
 
             var mode = attachments.ToLowerInvariant() switch

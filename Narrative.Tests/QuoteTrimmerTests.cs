@@ -32,6 +32,19 @@ namespace Narrative.Tests
         }
 
         [Theory]
+        [InlineData("Yes\n\nOn Wed, Sam wrote:\n> Lunch?\n>> Older", "Yes\n")]
+        [InlineData("> Lunch?\nYes\n> Where?\nThe usual", "Yes\nThe usual")]
+        [InlineData("On Wed, Sam wrote:\n> Lunch?\n\nYes", "\nYes")]
+        [InlineData("Hi\n\nOn Wed, 1 Jul 2021, Sam <\nsam@example.org> wrote:\n> Lunch?\nYes", "Hi\n\nYes")]
+        [InlineData("Sam said\n> Lunch?\nYes", "Sam said\nYes")]
+        [InlineData("> All quote", "")]
+        [InlineData("No quotes", "No quotes")]
+        public void RemoveQuotesTakesEveryQuoteAndItsAttribution(string body, string expected)
+        {
+            Assert.Equal(expected, QuoteTrimmer.RemoveQuotes(body));
+        }
+
+        [Theory]
         [InlineData("> Lunch?\n> Dinner?")]
         [InlineData("On Wed, Sam wrote:\n> Lunch?")]
         [InlineData("\n\n> Lunch?\n")]

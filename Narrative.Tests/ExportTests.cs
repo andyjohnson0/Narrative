@@ -451,6 +451,73 @@ namespace Narrative.Tests
         }
 
         [Fact]
+        public void JsonlHasOneLinePerMessageWithSomethingToSay()
+        {
+            var path = temp.File("chat.jsonl");
+            var (exitCode, output, error) = Run("-export", path, "-chat", "Bob Sample");
+            Assert.True(exitCode == 0, error);
+
+            var text = File.ReadAllText(path);
+            var lines = text.Split('\n');
+            Assert.Equal("", lines[^1]);
+            Assert.DoesNotContain('\r', text);
+            Assert.False(File.ReadAllBytes(path).AsSpan().StartsWith(new byte[] { 0xEF, 0xBB, 0xBF }));
+            // System lines, deleted placeholders and media without a caption are left out.
+            var messages = lines[..^1].Select(l => JsonDocument.Parse(l).RootElement).ToList();
+            Assert.Equal(
+                new[]
+                {
+                    ("Alice Example", "Hello <b>&</b> *world*\n- not a list\n\n1. nor this"),
+                    ("Bob Sample", "A caption"),
+                    ("Alice Example", "Fixed it\u0001"),
+                },
+                messages.Select(m => (m.GetProperty("userid").GetString()!, m.GetProperty("content").GetString()!)));
+            Assert.All(messages, m => Assert.Equal(2, m.EnumerateObject().Count()));
+            Assert.Contains("Hello <b>&</b>", lines[0]);
+            Assert.Contains("Exported 3 messages", output);
+            Assert.False(Directory.Exists(temp.File("chat_files")));
+        }
+
+        [Fact]
+        public void JsonlCantEmbedFiles()
+        {
+            var (exitCode, _, error) = Run("-export", temp.File("x.jsonl"), "-chat", "Bob Sample", "-attachments", "embed");
+
+            Assert.Equal(1, exitCode);
+            Assert.Contains("JSONL export can't embed", error);
+        }
+
+        [Fact]
+        public void JsonlKeepsWhatsAppQuotesAndTidiesText()
+        {
+            ExportMessage Message(string source, string kind, string text) => new()
+            {
+                Id = 1,
+                Timestamp = new DateTime(2022, 5, 1),
+                Source = source,
+                Chat = "Chat",
+                Sender = "Bob Sample",
+                SenderNumber = 1,
+                Kind = kind,
+                Text = text,
+                IsEdited = false,
+                AttachmentState = null,
+                AttachmentName = null,
+                Attachment = null,
+            };
+            var mention = "@" + (char)0x2068 + "Bob Sample" + (char)0x2069 + " hi  \n\n\n\nbye\n";
+
+            // WhatsApp's > formatting is the sender's own text.
+            Assert.Equal("> a quote\nmine", JsonlExporter.Content(Message("WhatsApp", "text", "> a quote\nmine")));
+            Assert.Equal("Mine", JsonlExporter.Content(Message("Email", "text", "> Lunch?\nMine\n\nOn Wed, Sam wrote:\n> Old")));
+            Assert.Equal("@Bob Sample hi\n\nbye", JsonlExporter.Content(Message("WhatsApp", "text", mention)));
+            Assert.Null(JsonlExporter.Content(Message("Email", "text", "> All quote")));
+            Assert.Null(JsonlExporter.Content(Message("WhatsApp", "media", "")));
+            Assert.Null(JsonlExporter.Content(Message("WhatsApp", "system", "Bob Sample added Carol Test")));
+            Assert.Null(JsonlExporter.Content(Message("WhatsApp", "deleted", "")));
+        }
+
+        [Fact]
         public void WhatsAppTextIsTheOriginalExport()
         {
             var text = File.ReadAllText(Export("out.txt", "-attachments", "none"));

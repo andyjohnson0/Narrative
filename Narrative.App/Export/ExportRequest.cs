@@ -13,6 +13,9 @@ namespace Narrative.App.Export
         /// <summary>WhatsApp's own text export format, as a .txt or a .zip with the attachments.</summary>
         WhatsApp,
 
+        /// <summary>JSON Lines: one object per message, sender and text only. No attachment files.</summary>
+        Jsonl,
+
         /// <summary>A user-supplied Scriban template.</summary>
         Template,
     }
@@ -92,6 +95,7 @@ namespace Narrative.App.Export
                 ".md" or ".markdown" => ExportFormat.Markdown,
                 ".html" or ".htm" => ExportFormat.Html,
                 ".csv" => ExportFormat.Csv,
+                ".jsonl" => ExportFormat.Jsonl,
                 ".txt" or ".zip" => ExportFormat.WhatsApp,
                 _ => null,
             };
@@ -109,6 +113,7 @@ namespace Narrative.App.Export
                 "md" or "markdown" => ExportFormat.Markdown,
                 "html" => ExportFormat.Html,
                 "csv" => ExportFormat.Csv,
+                "jsonl" => ExportFormat.Jsonl,
                 "whatsapp" or "txt" => ExportFormat.WhatsApp,
                 _ => null,
             };
