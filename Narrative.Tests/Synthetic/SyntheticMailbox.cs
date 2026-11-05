@@ -30,8 +30,11 @@ namespace Narrative.Tests.Synthetic
 
         public required DateTimeOffset Date { get; init; }
 
-        /// <summary>The body as narrative should store it.</summary>
+        /// <summary>The body as narrative should store it: the sender's own text, without the quote.</summary>
         public required string Body { get; init; }
+
+        /// <summary>The body as sent: the sender's text, then the previous email quoted.</summary>
+        public required string FullBody { get; init; }
 
         public required IReadOnlyList<(string Name, byte[] Bytes)> Attachments { get; init; }
 
@@ -126,15 +129,17 @@ namespace Narrative.Tests.Synthetic
             }
             var bcc = random.Next(4) == 0 && from == Me ? new List<MailPerson> { Pat == to ? Sam : Pat } : new List<MailPerson>();
 
-            // The body: new text, then the previous email quoted, as a reply does.
+            // The body: new text, then the previous email (with its own quote) quoted, as a reply does.
+            // narrative keeps only the new text.
             var paragraphs = Enumerable.Range(0, random.Next(1, 4))
                 .Select(_ => string.Join("\n", Enumerable.Range(0, random.Next(1, 3)).Select(_ => Sentence(random, random.Next(2, 9)))))
                 .ToList();
             var body = string.Join("\n\n", paragraphs);
-            if (previous != null && previous.Body.Length > 0)
+            var fullBody = body;
+            if (previous != null && previous.FullBody.Length > 0)
             {
-                var quoted = string.Join("\n", previous.Body.Split('\n').Select(l => l.Length == 0 ? ">" : "> " + l));
-                body += $"\n\nOn {previous.Date:ddd, d MMM yyyy}, {previous.From.StoredName} wrote:\n" + quoted;
+                var quoted = string.Join("\n", previous.FullBody.Split('\n').Select(l => l.Length == 0 ? ">" : "> " + l));
+                fullBody += $"\n\nOn {previous.Date:ddd, d MMM yyyy}, {previous.From.StoredName} wrote:\n" + quoted;
             }
 
             var attachments = new List<(string, byte[])>();
@@ -148,6 +153,7 @@ namespace Narrative.Tests.Synthetic
             if (number == 5)
             {
                 body = "";
+                fullBody = "";
                 if (attachments.Count == 0)
                 {
                     attachments.Add(($"scan-{number}.pdf", new byte[] { 1, 2, 3, (byte)seed }));
@@ -190,7 +196,7 @@ namespace Narrative.Tests.Synthetic
                 {
                     message.Headers.Add(HeaderId.Received, "from mx.example.org by mail.example.com; " + DateUtils.FormatDate(date.AddSeconds(5)));
                 }
-                message.Body = BodyFor(style, body, attachments, number);
+                message.Body = BodyFor(style, fullBody, attachments, number);
                 return message;
             }
 
@@ -202,6 +208,7 @@ namespace Narrative.Tests.Synthetic
                 From = from,
                 Date = date,
                 Body = body,
+                FullBody = fullBody,
                 Attachments = attachments,
                 Recipients = recipients,
                 Bcc = bcc,

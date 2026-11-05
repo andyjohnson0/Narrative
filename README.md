@@ -41,8 +41,10 @@ of every message.
   tolerated, and a later import can fill them in.
 - **Email**: `.eml` and mbox files, in any order. Each email is stored once however many copies
   you import (sent and received copies, an `.eml` and an mbox), with recipients combined. Email
-  threads are treated like chats. The body is kept as text, quoted replies included; attachments
-  are stored like WhatsApp's.
+  threads are treated like chats. The body is kept as text. The quoted copy of earlier emails at
+  the end of a reply (the `>` lines and the "On ..., X wrote:" line above them) is left out, so a
+  thread doesn't repeat itself in the timeline; quotes with your own text after them, as in
+  inline replies, are kept. Attachments are stored like WhatsApp's.
 - **People across sources**: a sender is matched by email address, then by name, so the Sam
   Taylor in your WhatsApp chats is the Sam Taylor who emails you.
 - **Aliases** for people who changed their name (`-alias "Sam Taylor" "Samuel Taylor"`), so
@@ -195,6 +197,8 @@ Each message has:
   isn't known to be in it, and their conversation with others there isn't found.
 - **Email keeps the text, not the look**: the HTML version, headers other than the date, subject,
   sender and recipients, and images embedded in HTML (such as signature logos) aren't kept.
+- **Only `>` quotes are trimmed from replies.** Clients that quote without `>` marks (Outlook's
+  "-----Original Message-----" or "From: ... Sent: ..." style) keep the whole earlier email.
 - **Email times are converted to UK time**, the zone the WhatsApp exports use.
 - **Replies and reactions aren't in WhatsApp's exports.** A reply is exported as an ordinary
   message, so reply threads can't be rebuilt.

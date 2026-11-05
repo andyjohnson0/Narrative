@@ -31,7 +31,7 @@ namespace Narrative.Tests
                 "01/07/2021, 10:32 - Alex Smith: Group 3",
                 ""));
             WriteEmail("1.eml", "Alex Smith <alex@example.com>", "Sam Taylor <sam@example.org>", null, "Thu, 1 Jul 2021 09:30:20 +0100", "Lunch?", "Email 1", "<1@x>", null);
-            WriteEmail("2.eml", "Sam Taylor <sam@example.org>", "Alex Smith <alex@example.com>", "Jo Brown <jo@example.net>", "Thu, 1 Jul 2021 10:45:00 +0100", "Re: Lunch?", "Email 2\n\n> Email 1", "<2@x>", "<1@x>");
+            WriteEmail("2.eml", "Sam Taylor <sam@example.org>", "Alex Smith <alex@example.com>", "Jo Brown <jo@example.net>", "Thu, 1 Jul 2021 10:45:00 +0100", "Re: Lunch?", "Email 2\n\n> Email 1\n\nSee you", "<2@x>", "<1@x>");
             WriteEmail("3.eml", "Alex Smith <alex@example.com>", "Jo Brown <jo@example.net>", null, "Thu, 1 Jul 2021 11:00:00 +0100", "Just Jo", "Email 3", "<3@x>", null);
             db = temp.File("test.db");
             RunOk("-init", "-import", input);
@@ -133,7 +133,7 @@ namespace Narrative.Tests
             Assert.Equal("2021-07-01T10:45:00", reply.GetProperty("timestamp").GetString());
             Assert.Equal("Email", reply.GetProperty("source").GetString());
             Assert.Equal("Lunch? (2021-07-01)", reply.GetProperty("chat").GetString());
-            Assert.Equal("Email 2\n\n> Email 1", reply.GetProperty("text").GetString());
+            Assert.Equal("Email 2\n\n> Email 1\n\nSee you", reply.GetProperty("text").GetString());
             var email = reply.GetProperty("email");
             Assert.Equal("Re: Lunch?", email.GetProperty("subject").GetString());
             Assert.Equal("2@x", email.GetProperty("messageId").GetString());
@@ -152,7 +152,7 @@ namespace Narrative.Tests
             Assert.Equal("timestamp,person,text,kind,edited,attachment,source,chat,subject", lines[0]);
             Assert.Equal("2021-07-01 09:00:00,\"Alex Smith\",\"Chat 1\",text,false,\"\",WhatsApp,\"Sam Taylor\",\"\"", lines[1]);
             Assert.Equal("2021-07-01 09:30:20,\"Alex Smith\",\"Email 1\",text,false,\"\",Email,\"Lunch? (2021-07-01)\",\"Lunch?\"", lines[2]);
-            Assert.Equal("2021-07-01 10:45:00,\"Sam Taylor\",\"Email 2 > Email 1\",text,false,\"\",Email,\"Lunch? (2021-07-01)\",\"Re: Lunch?\"", lines[5]);
+            Assert.Equal("2021-07-01 10:45:00,\"Sam Taylor\",\"Email 2 > Email 1 See you\",text,false,\"\",Email,\"Lunch? (2021-07-01)\",\"Re: Lunch?\"", lines[5]);
         }
 
         [Fact]
@@ -199,6 +199,8 @@ namespace Narrative.Tests
                 "Email 2",
                 "",
                 "> Email 1",
+                "",
+                "See you",
                 "01/07/2021, 12:00 - Sam Taylor: Chat 2",
             }, File.ReadAllText(path).Split('\n').SkipLast(1));
         }
@@ -247,7 +249,7 @@ namespace Narrative.Tests
             Assert.Equal(0, Cli.Run(new[] { "-export", json, "-chat", "Alex Smith and Sam Taylor", "-dbname", otherDb }, new StringWriter(), new StringWriter()));
             using var document = JsonDocument.Parse(File.ReadAllText(json));
             var messages = document.RootElement.GetProperty("messages").EnumerateArray().ToList();
-            Assert.Equal(new[] { "✉ Lunch?\nEmail 1", "✉ Re: Lunch?\nEmail 2\n\n> Email 1", "✉ Photo" },
+            Assert.Equal(new[] { "✉ Lunch?\nEmail 1", "✉ Re: Lunch?\nEmail 2\n\n> Email 1\n\nSee you", "✉ Photo" },
                 messages.Select(m => m.GetProperty("text").GetString()));
             Assert.Equal("stored", messages[2].GetProperty("attachment").GetProperty("state").GetString());
         }

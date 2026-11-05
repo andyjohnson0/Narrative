@@ -14,7 +14,10 @@ namespace Narrative.App.Mail
     /// </summary>
     /// <remarks>
     /// <para>The body is the plain-text version where the email has one, else its HTML converted to
-    /// text. Quoted replies (<c>&gt;</c> lines) are kept. Format=flowed text is unwrapped.</para>
+    /// text. Format=flowed text is unwrapped. The quoted copy of earlier emails at the end of a reply
+    /// is left out of <see cref="ParsedEmail.Body"/> (see <see cref="QuoteTrimmer"/>); quotes the
+    /// sender wrote after, as in inline replies, are kept. <see cref="ParsedEmail.FullBody"/> has
+    /// everything.</para>
     /// <para>Attachments are parts marked as attachments, forwarded emails (kept as .eml files), and
     /// other inline files such as photos pasted into the message. Images embedded in an HTML body
     /// (inside multipart/related, such as logos in signatures) aren't kept, because the HTML isn't
@@ -52,6 +55,7 @@ namespace Narrative.App.Mail
             var subject = (message.Subject ?? "").Trim();
             var fromAddress = from == null ? null : AddressOf(from);
             var text = string.Join("\n\n", body.Where(b => b.Length > 0));
+            // The stand-in id comes from the whole body, so it doesn't change if the trimming does.
             var messageId = string.IsNullOrWhiteSpace(message.MessageId)
                 ? StandIn(fromAddress, date.Value, subject, text)
                 : message.MessageId.Trim();
@@ -66,7 +70,8 @@ namespace Narrative.App.Mail
                 LocalTime = TimeZoneInfo.ConvertTime(date.Value, UkTime).DateTime,
                 From = fromAddress,
                 Recipients = recipients,
-                Body = text,
+                Body = QuoteTrimmer.TrimTrailingQuote(text),
+                FullBody = text,
                 Attachments = attachments,
             };
         }

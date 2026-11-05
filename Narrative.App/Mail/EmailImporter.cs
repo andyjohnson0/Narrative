@@ -254,7 +254,9 @@ namespace Narrative.App.Mail
                     ImportFileId = importFileId,
                     LineNumber = position,
                     SenderName = parsed.From == null ? null : parsed.From.Name ?? parsed.From.Address,
-                    RawText = "",
+                    // The body message keeps the whole body here, since the stored text leaves out the
+                    // trailing quote and the email file itself isn't kept.
+                    RawText = message.Kind == MessageKind.Text ? parsed.FullBody : "",
                 });
             }
         }

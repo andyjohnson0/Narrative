@@ -273,12 +273,37 @@ namespace Narrative.Tests
         }
 
         [Fact]
-        public void QuotedRepliesAreKeptAndCrlfBecomesLf()
+        public void TheTrailingQuoteIsLeftOutButKeptAsTheSourceAndCrlfBecomesLf()
         {
             var db = TestDatabase.Create(temp);
             Import(db, new[] { WriteEmail("a.eml", "Thu, 1 Jul 2021 10:00:00 +0000", "Yes please  \r\n\r\nOn Wed, Sam wrote:\r\n> Lunch?\r\n> \r\n") });
 
-            Assert.Equal("Yes please\n\nOn Wed, Sam wrote:\n> Lunch?\n>", Stored(db).Single().Body);
+            Assert.Equal("Yes please", Stored(db).Single().Body);
+            using var context = NarrativeDatabase.Open(db);
+            Assert.Equal("Yes please\n\nOn Wed, Sam wrote:\n> Lunch?\n>", context.MessageSources.Single().RawText);
+        }
+
+        [Fact]
+        public void InlineQuotesAreKept()
+        {
+            var db = TestDatabase.Create(temp);
+            Import(db, new[] { WriteEmail("a.eml", "Thu, 1 Jul 2021 10:00:00 +0000", "> Lunch?\r\nYes\r\n> Where?\r\nThe usual\r\n") });
+
+            Assert.Equal("> Lunch?\nYes\n> Where?\nThe usual", Stored(db).Single().Body);
+        }
+
+        [Fact]
+        public void TheTrailingQuoteOfAnHtmlOnlyEmailIsLeftOut()
+        {
+            var db = TestDatabase.Create(temp);
+            var path = WriteEmail("a.eml", "Thu, 1 Jul 2021 10:00:00 +0000",
+                "<html><body><div>Yes please</div><div class=\"gmail_quote\"><div>On Wed, Sam Taylor &lt;sam@example.org&gt; wrote:</div>" +
+                "<blockquote><p>Lunch?</p><blockquote><p>Older</p></blockquote></blockquote></div></body></html>");
+            File.WriteAllText(path, File.ReadAllText(path).Replace("text/plain", "text/html"));
+
+            Import(db, new[] { path });
+
+            Assert.Equal("Yes please", Stored(db).Single().Body);
         }
 
         [Fact]

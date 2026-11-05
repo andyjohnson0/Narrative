@@ -35,8 +35,14 @@ namespace Narrative.App.Mail
 
         public required IReadOnlyList<ParsedRecipient> Recipients { get; init; }
 
-        /// <summary>The body as plain text with LF line endings, quoted reply lines included.</summary>
+        /// <summary>
+        /// The body as plain text with LF line endings, without the quoted copy of earlier emails at its
+        /// end. Quoted lines with the sender's own text after them are kept.
+        /// </summary>
         public required string Body { get; init; }
+
+        /// <summary>The whole body, trailing quote included.</summary>
+        public required string FullBody { get; init; }
 
         public required IReadOnlyList<ParsedAttachment> Attachments { get; init; }
 

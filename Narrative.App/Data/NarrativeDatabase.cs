@@ -12,9 +12,10 @@ namespace Narrative.App.Data
         /// <summary>
         /// Stored in SQLite's user_version. Bump it whenever the schema changes, so older databases are
         /// reported instead of failing on a missing table or column. There are no migrations while
-        /// the schema is still changing; an old database is re-created and re-imported.
+        /// the schema is still changing; an old database is re-created and re-imported. Also bump it
+        /// when what's stored changes, as in version 4, where email bodies lose their trailing quote.
         /// </summary>
-        public const int SchemaVersion = 3;
+        public const int SchemaVersion = 4;
 
         /// <summary>
         /// Creates an empty database. Refuses if the file exists, unless <paramref name="force"/> is set.
