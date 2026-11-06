@@ -82,7 +82,9 @@ To build a standalone executable:
 dotnet publish Narrative.App -c Release -o publish
 ```
 
-The executable is `narrative` (`narrative.exe` on Windows).
+This gives a single, compressed, self-contained file, `narrative` (`narrative.exe` on Windows),
+about 45 MB, that runs without .NET installed. It's built for the platform you publish on; add
+`-r <runtime>` (such as `-r linux-x64` or `-r osx-arm64`) for another.
 
 ## Quick start
 
