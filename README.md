@@ -84,7 +84,12 @@ dotnet publish Narrative.App -c Release -o publish
 
 This gives a single, compressed, self-contained file, `narrative` (`narrative.exe` on Windows),
 about 45 MB, that runs without .NET installed. It's built for the platform you publish on; add
-`-r <runtime>` (such as `-r linux-x64` or `-r osx-arm64`) for another.
+`-r <runtime>` (such as `-r linux-x64` or `-r osx-arm64`) for another. A plain `dotnet build`
+always gives the usual set of DLLs; only publishing makes the single file.
+
+In Visual Studio, use **Publish** with the `FolderProfile` profile, which writes the same file for
+64-bit Windows to `Narrative.App\bin\Release\net10.0\publish\win-x64`. From the command line
+that's `dotnet publish Narrative.App -p:PublishProfile=FolderProfile`.
 
 ## Quick start
 

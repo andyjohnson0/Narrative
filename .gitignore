@@ -486,3 +486,6 @@ $RECYCLE.BIN/
 *.db-journal
 *.db-wal
 *.db-shm
+
+## Narrative: the folder publish profile holds no secrets, so it's checked in
+!Narrative.App/Properties/PublishProfiles/FolderProfile.pubxml
