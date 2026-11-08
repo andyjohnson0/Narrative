@@ -9,6 +9,10 @@ It currently handles WhatsApp chat exports and email (`.eml` and mbox files).
 Everything stays on your machine: Narrative is a command-line tool with a SQLite database, and it
 never sends anything anywhere.
 
+**Version 0.1** is the first release. For 64-bit Windows, download `narrative.exe` from the
+[releases page](https://github.com/andyjohnson0/Narrative/releases): it's a single file that runs
+without .NET installed. On other platforms, build it from source (see "Build and test").
+
 ## ⚠️ This code is agent-written
 
 Every line of code, test, and piece of documentation in this repository was written by
@@ -68,7 +72,8 @@ of every message.
 
 ## Requirements
 
-- [.NET 10 SDK](https://dotnet.microsoft.com/download)
+- To build from source, the [.NET 10 SDK](https://dotnet.microsoft.com/download). The release's
+  Windows executable needs nothing installed.
 - WhatsApp exports from **Android with a UK date format** (`dd/MM/yyyy, HH:mm - Sender: text`).
   Other phones and locales use different formats and aren't supported yet.
 
@@ -216,8 +221,9 @@ Each message has:
   message, so reply threads can't be rebuilt.
 - **WhatsApp times are to the minute**, and are local time as the phone showed them, with no time zone.
 - **WhatsApp leaves older media out of exports**, so some attachments may never be available.
-- **Prototype:** the database schema can still change. A database made by an older version must be
-  re-created (`-init -force`) and the exports imported again; Narrative tells you when.
+- **Prototype:** the database schema can still change between versions. A database made by an
+  older version, including a development build from before 0.1, must be re-created
+  (`-init -force`) and the exports imported again; Narrative tells you when.
 
 ## Privacy
 

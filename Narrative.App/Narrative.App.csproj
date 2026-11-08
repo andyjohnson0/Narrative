@@ -7,6 +7,12 @@
     <Nullable>enable</Nullable>
     <AssemblyName>narrative</AssemblyName>
     <RootNamespace>Narrative.App</RootNamespace>
+    <Version>0.1.0</Version>
+    <Product>Narrative</Product>
+    <Description>Collects WhatsApp chat exports and email into one local database, and exports the conversation between people as a single timeline.</Description>
+    <Authors>Andrew Johnson</Authors>
+    <Copyright>Copyright (c) 2026 Andrew Johnson</Copyright>
+    <RepositoryUrl>https://github.com/andyjohnson0/Narrative</RepositoryUrl>
   </PropertyGroup>
 
   <!-- A Release publish is one self-contained, compressed executable for this machine's platform
