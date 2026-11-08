@@ -22,6 +22,11 @@ namespace Narrative.App.Mail
     {
         private readonly NarrativeDbContext db;
 
+        static EmailImporter()
+        {
+            CodePages.EnsureRegistered();
+        }
+
         public EmailImporter(NarrativeDbContext db)
         {
             this.db = db;

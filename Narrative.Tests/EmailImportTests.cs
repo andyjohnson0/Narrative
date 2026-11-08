@@ -402,5 +402,76 @@ namespace Narrative.Tests
             Assert.Equal(3, context.Messages.Count(m => m.SenderId == sam.Id));
             Assert.Equal(new[] { "Alex Smith", "Sam Taylor" }, context.People.Select(p => p.DisplayName).OrderBy(n => n).ToArray());
         }
+
+        private string WriteRawEmail(string name, params string[] lines)
+        {
+            var path = temp.File(name);
+            File.WriteAllText(path, string.Join("\r\n", lines) + "\r\n");
+            return path;
+        }
+
+        private static void AssertNoC1Controls(string text)
+        {
+            Assert.DoesNotContain(text, c => c >= '\u0080' && c <= '\u009F');
+        }
+
+        [Fact]
+        public void Windows1252TextIsDecodedWithItsOwnCodePage()
+        {
+            // 0x80 is the euro sign and 0x93/0x94 are curly quotes in windows-1252, but C1 controls in Latin-1.
+            var db = TestDatabase.Create(temp);
+            var path = WriteRawEmail("a.eml",
+                "From: Sam Taylor <sam@example.org>",
+                "To: Alex Smith <alex@example.com>",
+                "Subject: =?windows-1252?Q?Caf=E9_prices_=96_=80?=",
+                "Date: Thu, 1 Jul 2021 10:00:00 +0000",
+                "Message-ID: <cp1252@example>",
+                "MIME-Version: 1.0",
+                "Content-Type: multipart/mixed; boundary=\"b\"",
+                "",
+                "--b",
+                "Content-Type: text/plain; charset=windows-1252",
+                "Content-Transfer-Encoding: quoted-printable",
+                "",
+                "Na=EFve caf=E9 =80 price, =93quoted=94",
+                "--b",
+                "Content-Type: text/plain",
+                "Content-Disposition: attachment; filename*=windows-1252''men%FA%80.txt",
+                "",
+                "menu",
+                "--b--");
+
+            Import(db, new[] { path });
+
+            var email = Stored(db).Single();
+            Assert.Equal("Naïve café € price, “quoted”", email.Body);
+            Assert.Equal("Café prices – €", email.Subject);
+            Assert.StartsWith("menú€.txt=", email.Attachments);
+            AssertNoC1Controls(email.Body + email.Subject + email.Attachments);
+        }
+
+        [Fact]
+        public void OtherLegacyCodePagesAreDecodedToo()
+        {
+            // An HTML-only email in windows-1250, where 0x8A is Š, 0xE8 č and 0x9A š.
+            var db = TestDatabase.Create(temp);
+            var path = WriteRawEmail("a.eml",
+                "From: Sam Taylor <sam@example.org>",
+                "To: Alex Smith <alex@example.com>",
+                "Subject: =?windows-1250?Q?=8Akoda?=",
+                "Date: Thu, 1 Jul 2021 10:00:00 +0000",
+                "Message-ID: <cp1250@example>",
+                "MIME-Version: 1.0",
+                "Content-Type: text/html; charset=windows-1250",
+                "Content-Transfer-Encoding: quoted-printable",
+                "",
+                "<html><body><p>=8Akoda =E8esk=E1 =9Akola</p></body></html>");
+
+            Import(db, new[] { path });
+
+            var email = Stored(db).Single();
+            Assert.Equal("Škoda česká škola", email.Body);
+            Assert.Equal("Škoda", email.Subject);
+        }
     }
 }

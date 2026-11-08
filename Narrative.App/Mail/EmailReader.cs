@@ -28,6 +28,11 @@ namespace Narrative.App.Mail
     {
         public static readonly TimeZoneInfo UkTime = TimeZoneInfo.FindSystemTimeZoneById("Europe/London");
 
+        static EmailReader()
+        {
+            CodePages.EnsureRegistered();
+        }
+
         /// <summary>
         /// Reads a message, or returns null with a reason if it can't be placed in time.
         /// </summary>
