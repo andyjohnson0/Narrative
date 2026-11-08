@@ -24,6 +24,12 @@ namespace Narrative.Tests.Synthetic
         /// </summary>
         public IReadOnlySet<int> DroppedFiles { get; init; } = new HashSet<int>();
 
+        /// <summary>
+        /// True for an export made by a WhatsApp version that rounds each message's time to the
+        /// nearest minute, where others drop the seconds.
+        /// </summary>
+        public bool RoundsTimes { get; init; }
+
         public int EffectiveAsOf => AsOf ?? To;
 
         public bool Contains(int index) => index >= From && index < To;

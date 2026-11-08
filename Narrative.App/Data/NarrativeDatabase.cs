@@ -14,8 +14,9 @@ namespace Narrative.App.Data
         /// reported instead of failing on a missing table or column. There are no migrations while
         /// the schema is still changing; an old database is re-created and re-imported. Also bump it
         /// when what's stored changes, as in version 4, where email bodies lose their trailing quote.
+        /// Version 5 adds MessageSource.Timestamp and pairs WhatsApp messages a minute apart.
         /// </summary>
-        public const int SchemaVersion = 4;
+        public const int SchemaVersion = 5;
 
         /// <summary>
         /// Creates an empty database. Refuses if the file exists, unless <paramref name="force"/> is set.

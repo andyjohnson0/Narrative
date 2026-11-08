@@ -8,14 +8,17 @@ namespace Narrative.App.WhatsApp
     /// </summary>
     public static class MessageMatcher
     {
-        private const int ExactScore = 2;
-        private const int VariantScore = 1;
+        // Within a minute only the ratio matters: an identical message is worth two variants.
+        private const int ExactScore = 4;
+        private const int ShiftedExactScore = 3;
+        private const int VariantScore = 2;
+        private const int ShiftedVariantScore = 1;
 
         /// <summary>
         /// Pairs incoming messages with stored messages from the same conversation and minute. Both
         /// lists must be in conversation order. This is a sequence alignment: pairs never cross, and the
-        /// pairing chosen maximises the score, where an identical message scores 2 and the same sender's
-        /// message in a different state (media, edit or delete) scores 1. So where identical messages
+        /// pairing chosen maximises the score, where an identical message scores twice as much as the
+        /// same sender's message in a different state (media, edit or delete). So where identical messages
         /// repeat within a minute, each is paired with the copy in the same position relative to its
         /// neighbours, even if one of them was later deleted or edited.
         /// </summary>
@@ -26,45 +29,135 @@ namespace Narrative.App.WhatsApp
             IReadOnlyList<(int? Sender, MessageContent Content)> incoming,
             IReadOnlyList<(int? Sender, MessageContent Content)> stored)
         {
+            return Match(
+                incoming.Select(x => (x.Sender, x.Content, default(DateTime))).ToList(),
+                stored.Select(x => (x.Sender, x.Content, default(DateTime))).ToList());
+        }
+
+        /// <summary>
+        /// Pairs incoming messages with stored messages over a run of adjacent minutes, allowing a
+        /// pair a minute apart, because some WhatsApp versions round times to the nearest minute where
+        /// others drop the seconds. Both lists must be in time order, and in conversation order within
+        /// a minute. Rounding never reorders messages, so pairs still never cross.
+        /// </summary>
+        /// <remarks>
+        /// Scores, highest first: identical in the same minute, identical a minute apart, a variant in
+        /// the same minute, a variant a minute apart. So a message a minute away from its identical
+        /// copy pairs with that copy rather than with a mere variant (such as a deleted placeholder) in
+        /// its own minute, and a message with an identical copy in its own minute never pairs across.
+        /// Within one minute this is <see cref="MatchMinute"/>.
+        /// </remarks>
+        /// <param name="incoming">Incoming messages as (sender key, content, minute).</param>
+        /// <param name="stored">Stored messages in the same form.</param>
+        /// <returns>A map from incoming index to stored index. Unmapped incoming messages are new.</returns>
+        public static Dictionary<int, int> Match(
+            IReadOnlyList<(int? Sender, MessageContent Content, DateTime Minute)> incoming,
+            IReadOnlyList<(int? Sender, MessageContent Content, DateTime Minute)> stored)
+        {
             int n = incoming.Count, m = stored.Count;
 
             int Score(int i, int j)
             {
-                if (incoming[i] == stored[j])
+                var (sender, content, minute) = incoming[i];
+                var other = stored[j];
+                if (sender != other.Sender)
                 {
-                    return ExactScore;
+                    return 0;
                 }
-                if (incoming[i].Sender == stored[j].Sender && AreVariants(incoming[i].Content, stored[j].Content))
+                var gap = Math.Abs((minute - other.Minute).Ticks);
+                if (gap > TimeSpan.TicksPerMinute)
                 {
-                    return VariantScore;
+                    return 0;
+                }
+                var sameMinute = gap == 0;
+                if (content == other.Content)
+                {
+                    return sameMinute ? ExactScore : ShiftedExactScore;
+                }
+                if (AreVariants(content, other.Content))
+                {
+                    return sameMinute ? VariantScore : ShiftedVariantScore;
                 }
                 return 0;
             }
 
-            // best[i, j] is the highest score for aligning incoming[i..] with stored[j..].
-            var best = new int[n + 1, m + 1];
+            // Incoming i can pair only with stored [low[i], high[i]): those within a minute of it. Both
+            // lists are in time order, so the bounds never decrease, and the table is a band.
+            var low = new int[n];
+            var high = new int[n];
+            for (int i = 0, lo = 0, hi = 0; i < n; i++)
+            {
+                var minute = incoming[i].Minute;
+                while (lo < m && minute - stored[lo].Minute > TimeSpan.FromMinutes(1))
+                {
+                    lo++;
+                }
+                hi = Math.Max(hi, lo);
+                while (hi < m && stored[hi].Minute - minute <= TimeSpan.FromMinutes(1))
+                {
+                    hi++;
+                }
+                low[i] = lo;
+                high[i] = hi;
+            }
+
+            // best(i, j) is the highest score for aligning incoming[i..] with stored[j..]. Row i keeps
+            // j in [low[i], high[i] + 1] (capped at m). Outside that it equals a kept value: for
+            // j < low[i] no stored message before low[i] can pair with incoming[i..], so it's
+            // best(i, low[i]); for j > high[i] incoming i can't pair, so it's best(i + 1, j).
+            var rows = new int[n][];
+            int Best(int i, int j)
+            {
+                for (; i < n; i++)
+                {
+                    if (j >= m)
+                    {
+                        return 0;
+                    }
+                    j = Math.Max(j, low[i]);
+                    if (j <= Math.Min(high[i] + 1, m))
+                    {
+                        return rows[i][j - low[i]];
+                    }
+                }
+                return 0;
+            }
+
             for (int i = n - 1; i >= 0; i--)
             {
-                for (int j = m - 1; j >= 0; j--)
+                var end = Math.Min(high[i] + 1, m);
+                var row = rows[i] = new int[end - low[i] + 1];
+                for (int j = end; j >= low[i]; j--)
                 {
-                    var score = Score(i, j);
-                    best[i, j] = Math.Max(
-                        score > 0 ? score + best[i + 1, j + 1] : 0,
-                        Math.Max(best[i + 1, j], best[i, j + 1]));
+                    if (j == m)
+                    {
+                        row[j - low[i]] = 0;
+                        continue;
+                    }
+                    var score = j < high[i] ? Score(i, j) : 0;
+                    var skipStored = j + 1 <= end ? row[j + 1 - low[i]] : Best(i + 1, j + 1);
+                    row[j - low[i]] = Math.Max(
+                        score > 0 ? score + Best(i + 1, j + 1) : 0,
+                        Math.Max(Best(i + 1, j), skipStored));
                 }
             }
 
             var matches = new Dictionary<int, int>();
             for (int i = 0, j = 0; i < n && j < m;)
             {
-                var score = Score(i, j);
-                if (score > 0 && best[i, j] == score + best[i + 1, j + 1])
+                if (j < low[i])
+                {
+                    j = low[i];
+                    continue;
+                }
+                var score = j < high[i] ? Score(i, j) : 0;
+                if (score > 0 && Best(i, j) == score + Best(i + 1, j + 1))
                 {
                     matches[i] = j;
                     i++;
                     j++;
                 }
-                else if (best[i + 1, j] >= best[i, j + 1])
+                else if (Best(i + 1, j) >= Best(i, j + 1))
                 {
                     i++;
                 }

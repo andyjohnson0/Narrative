@@ -23,6 +23,7 @@ namespace Narrative.Tests
         {
             return chat.Messages
                 .Where(m => exports.Any(e => e.Contains(m.Index)))
+                .OrderBy(m => SyntheticChat.ExpectedTimestamp(m, exports))
                 .Select(m =>
                 {
                     var (state, key) = chat.ExpectedAttachment(m, exports, supplying);
@@ -35,7 +36,8 @@ namespace Narrative.Tests
         {
             return chat.Messages
                 .Where(m => exports.Any(e => e.Contains(m.Index)))
-                .Select(m => new StoredMessage(chat.Name, m.Timestamp, m.Sender, chat.ExpectedContent(m, exports)))
+                .Select(m => new StoredMessage(chat.Name, SyntheticChat.ExpectedTimestamp(m, exports), m.Sender, chat.ExpectedContent(m, exports)))
+                .OrderBy(m => m.Timestamp)
                 .ToList();
         }
 
@@ -190,22 +192,23 @@ namespace Narrative.Tests
             Assert.Equal(ExpectedAttachments(chat, new[] { spec }, new[] { spec }), TestDatabase.Attachments(db));
         }
 
-        public static TheoryData<int> Seeds => new() { 50, 51, 52 };
+        public static TheoryData<int, bool> SeedsAndRounding => new() { { 50, false }, { 51, false }, { 52, false }, { 50, true }, { 51, true } };
 
         [Theory]
-        [MemberData(nameof(Seeds))]
-        public void MixedExportsGiveTheSameResultInAnyOrder(int seed)
+        [MemberData(nameof(SeedsAndRounding))]
+        public void MixedExportsGiveTheSameResultInAnyOrder(int seed, bool roundsTimes)
         {
             var chat = SyntheticChat.Generate(seed, messageCount: 1500);
             var dropped = chat.Messages.Where(m => m.IsMedia && m.Index >= 1000 && m.Index < 1300).Take(4).Select(m => m.Index).ToHashSet();
             var exports = new[]
             {
                 new ExportSpec(0, 700, WithMedia: false),
-                new ExportSpec(0, 1000) { MediaWindow = 500 },
-                new ExportSpec(950, 1300) { DroppedFiles = dropped },
+                new ExportSpec(0, 1000) { MediaWindow = 500, RoundsTimes = roundsTimes },
+                new ExportSpec(950, 1300) { DroppedFiles = dropped, RoundsTimes = roundsTimes },
                 new ExportSpec(1250, 1500),
             };
             // The first two are zips, the third a bare text file (attachments missing), the last a folder.
+            // With roundsTimes, the second and third come from a WhatsApp version that rounds times.
             var supplying = new[] { exports[1], exports[3] };
             var expectedMessages = ExpectedMessages(chat, exports);
             var expectedAttachments = ExpectedAttachments(chat, exports, supplying);

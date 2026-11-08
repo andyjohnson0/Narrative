@@ -127,6 +127,18 @@ namespace Narrative.Tests.Synthetic
                 });
             }
 
+            // Seconds come from their own generator, so adding them didn't change any seed's chat.
+            // Messages in one minute get increasing seconds, as they were sent in order.
+            var seconds = new Random(seed * 7919 + 1);
+            foreach (var minute in messages.GroupBy(m => m.Timestamp))
+            {
+                var drawn = minute.Select(_ => seconds.Next(60)).Order().ToList();
+                foreach (var (m, second) in minute.Zip(drawn))
+                {
+                    m.Second = second;
+                }
+            }
+
             return new SyntheticChat(name, participants, messages);
         }
 
@@ -199,11 +211,11 @@ namespace Narrative.Tests.Synthetic
         {
             var sb = new StringBuilder();
             var first = Messages[spec.From];
-            sb.Append(Header(first.Timestamp)).Append(EncryptionNotice).Append('\n');
+            sb.Append(Header(TimeIn(first, spec))).Append(EncryptionNotice).Append('\n');
             for (int i = spec.From; i < spec.To; i++)
             {
                 var m = Messages[i];
-                sb.Append(Header(m.Timestamp));
+                sb.Append(Header(TimeIn(m, spec)));
                 if (!m.IsSystem)
                 {
                     sb.Append(m.Sender).Append(": ");
@@ -237,6 +249,21 @@ namespace Narrative.Tests.Synthetic
             }
             File.WriteAllText(path, content, new UTF8Encoding(false));
             return path;
+        }
+
+        /// <summary>The minute an export shows for a message.</summary>
+        public static DateTime TimeIn(SyntheticMessage m, ExportSpec spec)
+        {
+            return spec.RoundsTimes && m.Second >= 30 ? m.Timestamp.AddMinutes(1) : m.Timestamp;
+        }
+
+        /// <summary>
+        /// The time the database should hold for a message after importing <paramref name="exports"/>:
+        /// the earliest any of them showed, which is the true minute unless every export rounded it up.
+        /// </summary>
+        public static DateTime ExpectedTimestamp(SyntheticMessage m, IEnumerable<ExportSpec> exports)
+        {
+            return exports.Where(e => e.Contains(m.Index)).Min(e => TimeIn(m, e));
         }
 
         private static string Header(DateTime timestamp)

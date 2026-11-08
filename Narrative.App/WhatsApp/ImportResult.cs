@@ -35,6 +35,12 @@ namespace Narrative.App.WhatsApp
         /// <summary>Stored messages whose content this file improved.</summary>
         public int Updated { get; init; }
 
+        /// <summary>
+        /// Matched messages whose stored copy is a minute away from this file's time for them, because
+        /// some WhatsApp versions round times to the nearest minute.
+        /// </summary>
+        public int Shifted { get; init; }
+
         /// <summary>Lines before the first message header, which were ignored.</summary>
         public int OrphanLines { get; init; }
 

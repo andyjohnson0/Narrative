@@ -92,78 +92,125 @@ namespace Narrative.App.WhatsApp
             };
             db.ImportFiles.Add(importFile);
 
+            // Some WhatsApp versions round each message's time to the nearest minute where others drop
+            // the seconds, so a message can be a minute later in one export than in another. The
+            // minutes either side of the file are loaded too, so its first and last messages can pair.
             var storedByMinute = (conversation.Id == 0
                     ? new List<Message>()
                     : db.Messages
-                        .Where(m => m.ConversationId == conversation.Id && m.Timestamp >= first && m.Timestamp <= last)
+                        .Where(m => m.ConversationId == conversation.Id
+                            && m.Timestamp >= first.AddMinutes(-1) && m.Timestamp <= last.AddMinutes(1))
                         .ToList())
                 .GroupBy(m => m.Timestamp)
                 .ToDictionary(g => g.Key, g => g.OrderBy(m => m.Seq).ToList());
 
-            var resolved = new Message[parsed.Messages.Count];
-            int added = 0, matched = 0, updated = 0;
-            foreach (var minute in Enumerable.Range(0, parsed.Messages.Count).GroupBy(i => parsed.Messages[i].Timestamp))
+            // People created by this import have Id 0, which no stored message has, so they never match.
+            int? SenderId(ParsedMessage p) => p.Sender == null ? null : people[p.Sender].Id;
+
+            // The file's messages by minute, each minute's in file order.
+            var minutes = Enumerable.Range(0, parsed.Messages.Count)
+                .GroupBy(i => parsed.Messages[i].Timestamp)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            // Pair messages over each run of consecutive minutes, since a pair can be a minute apart.
+            var pairs = new Message?[parsed.Messages.Count];
+            int shifted = 0;
+            foreach (var run in MinuteRuns(minutes.Keys.Union(storedByMinute.Keys)))
             {
-                var indices = minute.ToList();
-                var incoming = indices.Select(i => parsed.Messages[i]).ToList();
-                var stored = storedByMinute.GetValueOrDefault(minute.Key) ?? new List<Message>();
-
-                // People created by this import have Id 0, which no stored message has, so they never match.
-                var matches = MessageMatcher.MatchMinute(
-                    incoming.Select(p => (p.Sender == null ? (int?)null : people[p.Sender].Id, p.Content)).ToList(),
-                    stored.Select(m => (m.SenderId, m.Content)).ToList());
-
-                for (int k = 0; k < incoming.Count; k++)
+                var incoming = run.SelectMany(t => minutes.GetValueOrDefault(t) ?? new List<int>()).ToList();
+                if (incoming.Count == 0)
                 {
-                    var p = incoming[k];
-                    if (matches.TryGetValue(k, out var j))
+                    continue;
+                }
+                var stored = run.SelectMany(t => storedByMinute.GetValueOrDefault(t) ?? new List<Message>()).ToList();
+                var matches = MessageMatcher.Match(
+                    incoming.Select(i => (SenderId(parsed.Messages[i]), parsed.Messages[i].Content, parsed.Messages[i].Timestamp)).ToList(),
+                    stored.Select(m => (m.SenderId, m.Content, m.Timestamp)).ToList());
+                foreach (var (k, j) in matches)
+                {
+                    pairs[incoming[k]] = stored[j];
+                    if (stored[j].Timestamp != parsed.Messages[incoming[k]].Timestamp)
                     {
-                        var message = stored[j];
-                        var (content, tookIncoming) = MessageMatcher.Merge(message.Content, message.ContentAsOf, p.Content, last);
-                        if (content != message.Content)
-                        {
-                            message.Content = content;
-                            updated += 1;
-                        }
-                        if (tookIncoming)
-                        {
-                            message.ContentAsOf = last;
-                        }
-                        resolved[indices[k]] = message;
-                        matched += 1;
-                    }
-                    else
-                    {
-                        var message = new Message
-                        {
-                            Conversation = conversation,
-                            Sender = p.Sender == null ? null : people[p.Sender],
-                            Timestamp = p.Timestamp,
-                            Content = p.Content,
-                            ContentAsOf = last,
-                        };
-                        db.Messages.Add(message);
-                        resolved[indices[k]] = message;
-                        added += 1;
+                        shifted += 1;
                     }
                 }
+            }
 
-                var ordered = MessageMatcher.MergeOrder(stored, indices.Select(i => resolved[i]).ToList());
+            var resolved = new Message[parsed.Messages.Count];
+            var vacated = new HashSet<DateTime>();
+            int added = 0, matched = 0, updated = 0;
+            for (int i = 0; i < parsed.Messages.Count; i++)
+            {
+                var p = parsed.Messages[i];
+                var message = pairs[i];
+                if (message != null)
+                {
+                    var (content, tookIncoming) = MessageMatcher.Merge(message.Content, message.ContentAsOf, p.Content, last);
+                    var improved = content != message.Content;
+                    message.Content = content;
+                    if (tookIncoming)
+                    {
+                        message.ContentAsOf = last;
+                    }
+
+                    // Of two times a minute apart, the earlier is the one with the seconds dropped, as
+                    // most exports have it. Keeping it makes the result independent of import order.
+                    if (p.Timestamp < message.Timestamp)
+                    {
+                        vacated.Add(message.Timestamp);
+                        message.Timestamp = p.Timestamp;
+                        improved = true;
+                    }
+                    if (improved)
+                    {
+                        updated += 1;
+                    }
+                    matched += 1;
+                }
+                else
+                {
+                    message = new Message
+                    {
+                        Conversation = conversation,
+                        Sender = p.Sender == null ? null : people[p.Sender],
+                        Timestamp = p.Timestamp,
+                        Content = p.Content,
+                        ContentAsOf = last,
+                    };
+                    db.Messages.Add(message);
+                    added += 1;
+                }
+                resolved[i] = message;
+
+                db.MessageSources.Add(new MessageSource
+                {
+                    Message = message,
+                    ImportFile = importFile,
+                    LineNumber = p.LineNumber,
+                    SenderName = p.Sender,
+                    Timestamp = p.Timestamp,
+                    RawText = p.RawText,
+                });
+            }
+
+            // Renumber the order within every minute this file has messages in or took a message from.
+            // A message paired across minutes counts only in the minute it ends up in. One that moved
+            // here from the next minute was sent after everything stored in this minute, so in the
+            // stored order it goes after them.
+            foreach (var minute in minutes.Keys.Union(vacated))
+            {
+                var stored = (storedByMinute.GetValueOrDefault(minute) ?? new List<Message>())
+                    .Concat(storedByMinute.GetValueOrDefault(minute.AddMinutes(1)) ?? new List<Message>())
+                    .Where(m => m.Timestamp == minute)
+                    .ToList();
+                var incoming = (minutes.GetValueOrDefault(minute) ?? new List<int>())
+                    .Select(i => resolved[i])
+                    .Where(m => m.Timestamp == minute)
+                    .ToList();
+                var ordered = MessageMatcher.MergeOrder(stored, incoming);
                 for (int seq = 0; seq < ordered.Count; seq++)
                 {
                     ordered[seq].Seq = seq;
-                }
-
-                foreach (var i in indices)
-                {
-                    db.MessageSources.Add(new MessageSource
-                    {
-                        Message = resolved[i],
-                        ImportFile = importFile,
-                        LineNumber = parsed.Messages[i].LineNumber,
-                        SenderName = parsed.Messages[i].Sender,
-                        RawText = parsed.Messages[i].RawText,
-                    });
                 }
             }
 
@@ -188,12 +235,31 @@ namespace Narrative.App.WhatsApp
                 Added = added,
                 Matched = matched,
                 Updated = updated,
+                Shifted = shifted,
                 OrphanLines = parsed.OrphanLines.Count,
                 AttachmentsReferenced = attachments.Referenced,
                 AttachmentsMissing = attachments.Missing,
                 AttachmentsLinked = attachments.Linked,
                 UnreferencedFiles = attachments.Unreferenced,
             };
+        }
+
+        /// <summary>
+        /// Splits minutes into runs of consecutive minutes, in time order. Messages can pair only
+        /// within a run, since a pair is at most a minute apart.
+        /// </summary>
+        private static List<List<DateTime>> MinuteRuns(IEnumerable<DateTime> minutes)
+        {
+            var runs = new List<List<DateTime>>();
+            foreach (var minute in minutes.Order())
+            {
+                if (runs.Count == 0 || minute - runs[^1][^1] > TimeSpan.FromMinutes(1))
+                {
+                    runs.Add(new List<DateTime>());
+                }
+                runs[^1].Add(minute);
+            }
+            return runs;
         }
 
         private ExportParseResult Parse(byte[] bytes)

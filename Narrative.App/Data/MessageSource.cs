@@ -27,7 +27,17 @@ namespace Narrative.App.Data
         /// </summary>
         public string? SenderName { get; set; }
 
-        /// <summary>The text after the sender, including continuation lines. Empty for email.</summary>
+        /// <summary>
+        /// The message's time as this file gave it. For WhatsApp it can be a minute away from the
+        /// message's own time, because some app versions round seconds to the nearest minute where
+        /// others drop them.
+        /// </summary>
+        public DateTime Timestamp { get; set; }
+
+        /// <summary>
+        /// The text after the sender, including continuation lines. For email, the whole body
+        /// (trailing quote included) on the body message, and empty on attachment messages.
+        /// </summary>
         public required string RawText { get; set; }
     }
 }

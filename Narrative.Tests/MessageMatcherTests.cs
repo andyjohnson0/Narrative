@@ -160,5 +160,111 @@ namespace Narrative.Tests
 
             Assert.Equal(new[] { "p", "q" }, result);
         }
+
+        private static readonly DateTime M = new(2019, 5, 12, 9, 11, 0);
+
+        private static (int? Sender, MessageContent Content, DateTime Minute) At(int minute, int? sender, MessageContent content)
+            => (sender, content, M.AddMinutes(minute));
+
+        [Fact]
+        public void AnIdenticalCopyAMinuteAwayBeatsAVariantInTheSameMinute()
+        {
+            // A rounded export has "x" a minute late, where the stored minute holds a deleted message.
+            var matches = MessageMatcher.Match(
+                new[] { At(1, 1, Text("x")), At(2, 1, Deleted()) },
+                new[] { At(0, 1, Text("x")), At(1, 1, Deleted()) });
+
+            Assert.Equal(new Dictionary<int, int> { [0] = 0, [1] = 1 }, matches);
+        }
+
+        [Fact]
+        public void AnIdenticalCopyInTheSameMinuteBeatsOneAMinuteAway()
+        {
+            var matches = MessageMatcher.Match(
+                new[] { At(1, 1, Text("ok")) },
+                new[] { At(0, 1, Text("ok")), At(1, 1, Text("ok")) });
+
+            Assert.Equal(new Dictionary<int, int> { [0] = 1 }, matches);
+        }
+
+        [Fact]
+        public void NothingPairsTwoMinutesApart()
+        {
+            Assert.Empty(MessageMatcher.Match(new[] { At(2, 1, Text("ok")) }, new[] { At(0, 1, Text("ok")) }));
+        }
+
+        [Fact]
+        public void VariantsPairAMinuteApart()
+        {
+            var matches = MessageMatcher.Match(new[] { At(1, 1, Media(null)) }, new[] { At(0, 1, Media("IMG-1.jpg")) });
+
+            Assert.Equal(new Dictionary<int, int> { [0] = 0 }, matches);
+        }
+
+        [Theory]
+        [InlineData(1)]
+        [InlineData(2)]
+        [InlineData(3)]
+        [InlineData(4)]
+        [InlineData(5)]
+        public void TheBandedAlignmentScoresAsWellAsAFullOne(int seed)
+        {
+            // Random messages over a long run of consecutive minutes, compared with a full table.
+            var rng = new Random(seed);
+            var contents = new[] { Text("a"), Text("b"), Text("a", edited: true), Media(null), Media("IMG-1.jpg"), Deleted() };
+            List<(int? Sender, MessageContent Content, DateTime Minute)> Random(int count)
+            {
+                var minute = 0;
+                return Enumerable.Range(0, count).Select(_ =>
+                {
+                    minute += rng.Next(3) == 0 ? 1 : 0;
+                    return At(minute, rng.Next(2), contents[rng.Next(contents.Length)]);
+                }).ToList();
+            }
+            var incoming = Random(120);
+            var stored = Random(110);
+            var matches = MessageMatcher.Match(incoming, stored);
+
+            Assert.True(matches.Keys.Zip(matches.Keys.Skip(1)).All(p => p.First < p.Second));
+            Assert.True(matches.Values.Zip(matches.Values.Skip(1)).All(p => p.First < p.Second), "pairs cross");
+            Assert.Equal(FullTableBest(incoming, stored), matches.Sum(p => Score(incoming[p.Key], stored[p.Value])));
+        }
+
+        /// <summary>The scoring <see cref="MessageMatcher.Match"/> documents, written out independently.</summary>
+        private static int Score(
+            (int? Sender, MessageContent Content, DateTime Minute) a,
+            (int? Sender, MessageContent Content, DateTime Minute) b)
+        {
+            var gap = Math.Abs((a.Minute - b.Minute).TotalMinutes);
+            if (a.Sender != b.Sender || gap > 1)
+            {
+                return 0;
+            }
+            if (a.Content == b.Content)
+            {
+                return gap == 0 ? 4 : 3;
+            }
+            if (MessageMatcher.AreVariants(a.Content, b.Content))
+            {
+                return gap == 0 ? 2 : 1;
+            }
+            return 0;
+        }
+
+        private static int FullTableBest(
+            List<(int? Sender, MessageContent Content, DateTime Minute)> incoming,
+            List<(int? Sender, MessageContent Content, DateTime Minute)> stored)
+        {
+            var best = new int[incoming.Count + 1, stored.Count + 1];
+            for (int i = incoming.Count - 1; i >= 0; i--)
+            {
+                for (int j = stored.Count - 1; j >= 0; j--)
+                {
+                    var score = Score(incoming[i], stored[j]);
+                    best[i, j] = Math.Max(score > 0 ? score + best[i + 1, j + 1] : 0, Math.Max(best[i + 1, j], best[i, j + 1]));
+                }
+            }
+            return best[0, 0];
+        }
     }
 }

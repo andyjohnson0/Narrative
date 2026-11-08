@@ -13,9 +13,11 @@ namespace Narrative.Tests
         /// </summary>
         private static List<StoredMessage> Expected(SyntheticChat chat, params ExportSpec[] exports)
         {
+            // OrderBy is stable, so messages keep their sent order within a minute.
             return chat.Messages
                 .Where(m => exports.Any(e => e.Contains(m.Index)))
-                .Select(m => new StoredMessage(chat.Name, m.Timestamp, m.Sender, chat.ExpectedContent(m, exports)))
+                .Select(m => new StoredMessage(chat.Name, SyntheticChat.ExpectedTimestamp(m, exports), m.Sender, chat.ExpectedContent(m, exports)))
+                .OrderBy(m => m.Timestamp)
                 .ToList();
         }
 
@@ -93,6 +95,40 @@ namespace Narrative.Tests
                 new[] { 0, 1, 2, 3 },
                 new[] { 3, 2, 1, 0 },
                 new[] { 1, 3, 0, 2 },
+            };
+            foreach (var order in orders)
+            {
+                var db = TestDatabase.Create(temp, $"order-{string.Join("", order)}.db");
+                TestDatabase.Import(db, order.Select(i => files[i]));
+                Assert.Equal(expected, TestDatabase.Messages(db));
+            }
+        }
+
+        [Theory]
+        [MemberData(nameof(Seeds))]
+        public void ExportsThatRoundTimesGiveTheSameResultInAnyOrder(int seed)
+        {
+            var chat = SyntheticChat.Generate(seed, messageCount: 1500);
+            // As above, but two of the exports round times to the nearest minute, so about half their
+            // messages are a minute later than in the others. One of those is without media too, so
+            // its shifted messages are variants of the stored ones, not copies.
+            var exports = new[]
+            {
+                new ExportSpec(0, 700, WithMedia: false) { RoundsTimes = true },
+                new ExportSpec(0, 1000),
+                new ExportSpec(950, 1300) { RoundsTimes = true },
+                new ExportSpec(1250, 1500),
+            };
+            var expected = Expected(chat, exports);
+
+            using var temp = new TempDirectory();
+            var files = exports.Select(e => chat.Write(temp.Path, e)).ToArray();
+            var orders = new[]
+            {
+                new[] { 0, 1, 2, 3 },
+                new[] { 3, 2, 1, 0 },
+                new[] { 1, 3, 0, 2 },
+                new[] { 2, 0, 3, 1 },
             };
             foreach (var order in orders)
             {

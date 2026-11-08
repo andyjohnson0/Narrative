@@ -7,7 +7,14 @@ namespace Narrative.Tests.Synthetic
     {
         public int Index { get; init; }
 
+        /// <summary>The minute the message was sent in.</summary>
         public DateTime Timestamp { get; init; }
+
+        /// <summary>
+        /// The second within that minute. Exports show minutes only, but an export that rounds times
+        /// puts a message sent at :30 or later in the next minute.
+        /// </summary>
+        public int Second { get; set; }
 
         /// <summary>The sender, or null for a system message.</summary>
         public string? Sender { get; init; }

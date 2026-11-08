@@ -257,6 +257,7 @@ namespace Narrative.App.Mail
                     // The body message keeps the whole body here, since the stored text leaves out the
                     // trailing quote and the email file itself isn't kept.
                     RawText = message.Kind == MessageKind.Text ? parsed.FullBody : "",
+                    Timestamp = message.Timestamp,
                 });
             }
         }

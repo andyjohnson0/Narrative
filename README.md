@@ -36,6 +36,9 @@ of every message.
   - Each message is matched with its copy in other exports, even when the copies differ: media
     left out in one and present in another, edited text, or deleted placeholders.
   - Identical messages sent in the same minute are kept apart.
+  - A message whose time differs by a minute between exports is still matched. Some WhatsApp
+    versions round times to the nearest minute where others drop the seconds; the earlier time
+    is kept.
   - The most complete version of each message wins.
 - **Attachments** are stored in the database, once each, whatever their names. Missing files are
   tolerated, and a later import can fill them in.

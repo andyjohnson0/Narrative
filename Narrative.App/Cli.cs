@@ -242,6 +242,7 @@ namespace Narrative.App
                     default:
                         status.Info($"{result.FileName}: chat '{result.ChatName}', {result.Parsed} messages: " +
                                     $"{result.Added} new, {result.Matched} already stored, {result.Updated} updated" +
+                                    (result.Shifted > 0 ? $", {result.Shifted} stored a minute apart" : "") +
                                     AttachmentSummary(result));
                         added += result.Added;
                         matched += result.Matched;
